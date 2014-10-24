@@ -34,6 +34,7 @@
 
 #include "sysinc.h"
 #include "module.h"
+#include <time.h>
 #include <dlfcn.h>
 #include <Python.h>
 #include <frameobject.h>
@@ -47,6 +48,7 @@ int     zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESU
 int	zbx_module_python_ping(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_version(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result);
+int	zbx_module_python_call_prof(AGENT_REQUEST *request, AGENT_RESULT *result);
 
 static ZBX_METRIC keys[] =
 /*      KEY                     FLAG		FUNCTION        	TEST PARAMETERS */
@@ -54,6 +56,7 @@ static ZBX_METRIC keys[] =
 	{"python.ping",		0,		zbx_module_python_ping,	NULL},
 	{"python.version",	0,		zbx_module_python_version,	NULL},
 	{"python",		CF_HAVEPARAMS,	zbx_module_python_call, ""},
+	{"python.prof",		CF_HAVEPARAMS,	zbx_module_python_call_prof, ""},   
 	{NULL}
 };
 
@@ -99,6 +102,8 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
       SET_UI64_RESULT(result, PyLong_AsLong(ret));
    } else if (PyLong_Check(ret)) {
       SET_UI64_RESULT(result, PyLong_AsLong(ret));
+   } else if (PyFloat_Check(ret)) {	   
+      SET_DBL_RESULT(result, PyFloat_AsDouble(ret));
    } else if (PyString_Check(ret)) {
       PyArg_Parse(ret, "s", &cstrret);
       SET_STR_RESULT(result, strdup(cstrret));
@@ -155,8 +160,13 @@ ZBX_METRIC	*zbx_module_item_list()
 
 int	zbx_module_python_ping(AGENT_REQUEST *request, AGENT_RESULT *result)
 {
-   SET_UI64_RESULT(result, 1);
-   
+   PyGILState_STATE gstate;
+   gstate = PyGILState_Ensure();
+   if (Py_IsInitialized() != 0)
+     SET_UI64_RESULT(result, 1);
+   else
+     SET_UI64_RESULT(result, 0);
+   PyGILState_Release(gstate);
    return SYSINFO_RET_OK;
 }
 
@@ -187,6 +197,34 @@ int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result)
    }
    return SYSINFO_RET_FAIL;
 }
+
+int	zbx_module_python_call_prof(AGENT_REQUEST *request, AGENT_RESULT *result)
+{
+   int ret_code;
+   struct timeval tv1;
+   struct timeval tv2;
+   unsigned long start, end;
+ 
+   gettimeofday(&tv1,NULL);
+   start = tv1.tv_sec*(uint64_t)1000000+tv1.tv_usec;
+   PyGILState_STATE gstate;
+   gstate = PyGILState_Ensure();
+   if (request->nparam < 1) {
+      SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
+      return SYSINFO_RET_FAIL;
+   }
+   ret_code = zbx_python_call_module(get_rparam(request, 0), request, result);
+   
+   PyGILState_Release(gstate);
+   gettimeofday(&tv2,NULL);
+   end = tv2.tv_sec*(uint64_t)1000000+tv2.tv_usec;
+   if (ret_code == 1) {
+      SET_UI64_RESULT(result, end-start);
+      return SYSINFO_RET_OK;
+   }
+   return SYSINFO_RET_FAIL;
+}
+
 
 
 /******************************************************************************
