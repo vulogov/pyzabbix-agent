@@ -17,6 +17,13 @@
 ** Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 **/
 
+
+/*
+ ** Vladimir Ulogov (c) 2014.
+ ** Use it at your own risk
+*/
+
+
 #include "sysinc.h"
 #include "module.h"
 #include <Python.h>
@@ -31,8 +38,6 @@ char *zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT
 int	zbx_module_python_ping(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_version(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result);
-int	zbx_module_dummy_echo(AGENT_REQUEST *request, AGENT_RESULT *result);
-int	zbx_module_dummy_random(AGENT_REQUEST *request, AGENT_RESULT *result);
 
 static ZBX_METRIC keys[] =
 /*      KEY                     FLAG		FUNCTION        	TEST PARAMETERS */
