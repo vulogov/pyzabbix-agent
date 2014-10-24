@@ -24,17 +24,26 @@
 */
 
 
+/* IMPORTANT !!!!!!!!
+ * Please change the definition of MAIN_PYTHON_LIB to a path to an actual dynamic Python library.
+ * Otherwise, your dyn-load Python modules will not be working.
+*/
+
+#define MAIN_PYTHON_LIB "/lib64/libpython2.7.so.1.0"
+
+
 #include "sysinc.h"
 #include "module.h"
+#include <dlfcn.h>
 #include <Python.h>
-
+#include <frameobject.h>
 
 extern char *CONFIG_LOAD_MODULE_PATH;
 char        *modpath;
 /* the variable keeps timeout setting for item processing */
 static int	item_timeout = 0;
 
-char *zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result);
+int     zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_ping(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_version(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result);
@@ -60,22 +69,44 @@ static ZBX_METRIC keys[] =
  *                                                                            *
  ******************************************************************************/
 
-char *zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result)  {
+int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result)  {
    int i;
    char *cstrret;
    PyObject* mod, *param, *fun, *ret;
 
    mod = PyImport_ImportModule(modname);
+   if (mod == NULL) {
+      SET_MSG_RESULT(result, strdup("Error importing of Python module"));
+      PyErr_Print();
+      return 0;
+   }
    param = PyTuple_New(request->nparam-1);
    for (i=1;i<request->nparam;i++) {
       PyTuple_SET_ITEM(param,i-1,PyString_FromString(get_rparam(request, i)));
    }
    fun = PyObject_GetAttrString(mod, "main");
+   if (fun == NULL) {
+      SET_MSG_RESULT(result, strdup("Python module does not have a main() function"));
+      return 0;
+   }   
    ret = PyEval_CallObject(fun, param);
-   PyArg_Parse(ret, "s", &cstrret);
-   printf("%s\n", cstrret);
-   SET_STR_RESULT(result, strdup(cstrret));
-   return cstrret;
+   if (ret == NULL) {
+      SET_MSG_RESULT(result, strdup("Python code threw a traceback"));
+      PyErr_Print();
+      return 0;
+   }
+   if (PyInt_Check(ret)) {
+      SET_UI64_RESULT(result, PyLong_AsLong(ret));
+   } else if (PyLong_Check(ret)) {
+      SET_UI64_RESULT(result, PyLong_AsLong(ret));
+   } else if (PyString_Check(ret)) {
+      PyArg_Parse(ret, "s", &cstrret);
+      SET_STR_RESULT(result, strdup(cstrret));
+   } else {
+      SET_MSG_RESULT(result, strdup("Python returned unsupported value"));
+      return 0;
+   }
+   return 1;
 }
 
 
@@ -141,16 +172,20 @@ int	zbx_module_python_version(AGENT_REQUEST *request, AGENT_RESULT *result)
 
 int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result)
 {
-   
+   int ret_code;
    PyGILState_STATE gstate;
    gstate = PyGILState_Ensure();
    if (request->nparam < 1) {
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
       return SYSINFO_RET_FAIL;
    }
-   zbx_python_call_module(get_rparam(request, 0), request, result);
+   ret_code = zbx_python_call_module(get_rparam(request, 0), request, result);
+   /* printf("@@@ %d\n", ret_code); */
    PyGILState_Release(gstate);
-   return SYSINFO_RET_OK;
+   if (ret_code == 1) {
+      return SYSINFO_RET_OK;
+   }
+   return SYSINFO_RET_FAIL;
 }
 
 
@@ -170,8 +205,17 @@ int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result)
 int	zbx_module_init()
 {
    PyObject *mod, *param, *fun;
-   modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+36);
-   sprintf(modpath, "%s/pymodules", CONFIG_LOAD_MODULE_PATH);
+   char *pythonpath;
+   pythonpath=secure_getenv("PYTHONPATH");
+   if (pythonpath == NULL) {
+      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+128);
+      sprintf(modpath, "%s/pymodules", CONFIG_LOAD_MODULE_PATH);
+   } else  {
+      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+16);
+      sprintf(modpath, "%s/pymodules:%s", CONFIG_LOAD_MODULE_PATH, pythonpath);
+   } 
+   /* printf("*** %s\n", modpath); */
+   dlopen(MAIN_PYTHON_LIB, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
    Py_SetProgramName("zabbix_agentd");
    Py_Initialize();
    PySys_SetPath(modpath);
