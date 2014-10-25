@@ -1,0 +1,6 @@
+#!/bin/bash
+
+P=`type -p python`
+PYLIB=`ldd $P|grep python|cut -f 3 -d " "`
+echo "#define MAIN_PYTHON_LIB \"$PYLIB\"" > pyzabbix_cfg.h
+

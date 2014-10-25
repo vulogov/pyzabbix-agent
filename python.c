@@ -29,7 +29,8 @@
  * Otherwise, your dyn-load Python modules will not be working.
 */
 
-#define MAIN_PYTHON_LIB "/lib64/libpython2.7.so.1.0"
+/*#define MAIN_PYTHON_LIB "/lib64/libpython2.7.so.1.0"*/
+#include "pyzabbix_cfg.h"
 
 
 #include "sysinc.h"

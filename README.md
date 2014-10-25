@@ -8,14 +8,11 @@ loading of the interpreter
 * Installation.
 
 At this moment, I do not recommend to use this module in a production
-environment. There are bugs. There are undetected issues. 
+environment. There are bugs. There are undetected issues.
 
-First you have to do is to modify MAIN_PYTHON_LIB in python.c and
-point it to your actual Python dynamic library. This module will
-pre-load Python library during the startup. This is necessary for the
-Python dynamic modules.
+Run ./configure script
 
-Next, check the include path and compilation parameters in Makefile
+Check the include path and compilation parameters in Makefile
 and run male
 
 Copy python.so to the directory defined by LoadModulePath in
