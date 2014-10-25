@@ -31,7 +31,7 @@ Add LoadModule=python.so in your zabbix_agentd.conf
 
 Set the PYTHONPATH as 
 
-export PYTHONPATH=python -c "import sys; print ':'.join(sys.path)"
+export PYTHONPATH=`python -c "import sys; print ':'.join(sys.path)"`
 
 
 Restart zabbix_agentd
