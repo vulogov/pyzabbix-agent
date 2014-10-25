@@ -24,12 +24,6 @@
 */
 
 
-/* IMPORTANT !!!!!!!!
- * Please change the definition of MAIN_PYTHON_LIB to a path to an actual dynamic Python library.
- * Otherwise, your dyn-load Python modules will not be working.
-*/
-
-/*#define MAIN_PYTHON_LIB "/lib64/libpython2.7.so.1.0"*/
 #include "pyzabbix_cfg.h"
 
 
@@ -46,20 +40,23 @@ PyObject    *ctx;
 /* the variable keeps timeout setting for item processing */
 static int	item_timeout = 0;
 
-int     zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result);
+int     zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result, int pass_cmd);
 int	zbx_module_python_ping(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_version(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result);
 int	zbx_module_python_call_prof(AGENT_REQUEST *request, AGENT_RESULT *result);
+int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result);
+int     zbx_set_return_value(AGENT_RESULT *result, PyObject *retvalue);
 
 static ZBX_METRIC keys[] =
 /*      KEY                     FLAG		FUNCTION        	TEST PARAMETERS */
 {
-	{"python.ping",		0,		zbx_module_python_ping,	NULL},
-	{"python.version",	0,		zbx_module_python_version,	NULL},
-	{"python",		CF_HAVEPARAMS,	zbx_module_python_call, ""},
-	{"python.prof",		CF_HAVEPARAMS,	zbx_module_python_call_prof, ""},   
-	{NULL}
+   {"python.ping",	0,		zbx_module_python_ping,	NULL},
+   {"python.version",	0,		zbx_module_python_version, NULL},
+   {"py",  		CF_HAVEPARAMS,	zbx_module_python_call_wrap, ""},
+   {"python",		CF_HAVEPARAMS,	zbx_module_python_call, ""},
+   {"python.prof",	CF_HAVEPARAMS,	zbx_module_python_call_prof, ""},
+   {NULL}
 };
 
 
@@ -74,36 +71,9 @@ static ZBX_METRIC keys[] =
  *                                                                            *
  ******************************************************************************/
 
-int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result)  {
-   int i;
-   char *cstrret;
-   PyObject* mod, *param, *fun, *ret;
 
-   mod = PyImport_ImportModule(modname);
-   if (mod == NULL) {
-      SET_MSG_RESULT(result, strdup("Error importing of Python module"));
-      PyErr_Print();
-      return 0;
-   }
-   param = PyTuple_New(request->nparam);
-   PyTuple_SET_ITEM(param, 0, ctx);
-   for (i=1;i<request->nparam;i++) {
-      PyTuple_SET_ITEM(param,i,PyString_FromString(get_rparam(request, i)));
-   }
-   fun = PyObject_GetAttrString(mod, "main");
-   if (fun == NULL) {
-      SET_MSG_RESULT(result, strdup("Python module does not have a main() function"));
-      return 0;
-   }   
-   ret = PyEval_CallObject(fun, param);
-   if (ret == NULL) {
-      SET_MSG_RESULT(result, strdup("Python code threw a traceback"));
-      PyErr_Print();
-      return 0;
-   }
-   Py_DECREF(mod);
-   Py_DECREF(param);
-   Py_DECREF(fun);
+int zbx_set_return_value(AGENT_RESULT *result, PyObject *ret) {
+   char *cstrret;
    if (PyInt_Check(ret)) {
       SET_UI64_RESULT(result, PyLong_AsLong(ret));
    } else if (PyLong_Check(ret)) {
@@ -115,11 +85,69 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
       SET_STR_RESULT(result, strdup(cstrret));
    } else {
       SET_MSG_RESULT(result, strdup("Python returned unsupported value"));
-      Py_DECREF(ret);
       return 0;
    }
-   Py_DECREF(ret);
    return 1;
+}
+
+
+int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *result, int pass_cmd)  {
+   int i, retvalue_ret_code;
+   PyObject* mod, *param, *fun, *ret;
+
+   mod = PyImport_ImportModule(modname);
+   
+   if (mod == NULL) {
+      SET_MSG_RESULT(result, strdup("Error importing of Python module"));
+      PyErr_Print();
+      return 0;
+   }
+   if (pass_cmd == 0)   {
+      param = PyTuple_New(request->nparam);
+      for (i=1;i<request->nparam;i++) {
+	 PyTuple_SET_ITEM(param,i,PyString_FromString(get_rparam(request, i)));
+      }
+   } else {
+      param = PyTuple_New(request->nparam+1);
+      PyTuple_SET_ITEM(param, 1, PyString_FromString(get_rparam(request, 0)));
+      for (i=0;i<request->nparam;i++) {
+	 PyTuple_SET_ITEM(param,i+1,PyString_FromString(get_rparam(request, i)));
+      }
+   }
+   PyTuple_SET_ITEM(param, 0, ctx);
+   fun = PyObject_GetAttrString(mod, "main");
+   if (fun == NULL) {
+      SET_MSG_RESULT(result, strdup("Python module does not have a main() function"));
+      return 0;
+   }
+   
+   ret = PyEval_CallObject(fun, param);
+   
+   if (ret == NULL) {
+      SET_MSG_RESULT(result, strdup("Python code threw a traceback"));
+      PyErr_Print();
+      return 0;
+   }
+   
+   Py_DECREF(mod);
+   Py_DECREF(param);
+   Py_DECREF(fun);
+   
+   if (PyTuple_Check(ret)) {
+      long wrapper_ret_code;
+      wrapper_ret_code = PyLong_AsLong(PyTuple_GetItem(ret, 0));
+      if ( wrapper_ret_code == 0 ) {
+	 retvalue_ret_code = 0;
+	 SET_MSG_RESULT(result, strdup(PyString_AsString(PyTuple_GetItem(ret, 2))));
+      } else {
+	 retvalue_ret_code = zbx_set_return_value(result, PyTuple_GetItem(ret, 1));
+      }
+   } else {	
+      retvalue_ret_code = zbx_set_return_value(result, ret);
+   }
+   
+   Py_DECREF(ret);
+   return retvalue_ret_code;
 }
 
 
@@ -197,7 +225,7 @@ int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result)
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
       return SYSINFO_RET_FAIL;
    }
-   ret_code = zbx_python_call_module(get_rparam(request, 0), request, result);
+   ret_code = zbx_python_call_module(get_rparam(request, 0), request, result, 0);
    /* printf("@@@ %d\n", ret_code); */
    PyGILState_Release(gstate);
    if (ret_code == 1) {
@@ -221,13 +249,35 @@ int	zbx_module_python_call_prof(AGENT_REQUEST *request, AGENT_RESULT *result)
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
       return SYSINFO_RET_FAIL;
    }
-   ret_code = zbx_python_call_module(get_rparam(request, 0), request, result);
+   ret_code = zbx_python_call_module(get_rparam(request, 0), request, result, 0);
    
    PyGILState_Release(gstate);
    gettimeofday(&tv2,NULL);
    end = tv2.tv_sec*(uint64_t)1000000+tv2.tv_usec;
    if (ret_code == 1) {
       SET_UI64_RESULT(result, end-start);
+      return SYSINFO_RET_OK;
+   }
+   return SYSINFO_RET_FAIL;
+}
+
+
+int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result)
+{
+   int ret_code;
+ 
+   PyGILState_STATE gstate;
+   gstate = PyGILState_Ensure();
+   
+   if (request->nparam < 1) {
+      SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
+      return SYSINFO_RET_FAIL;
+   }
+
+   ret_code = zbx_python_call_module("ZBX_call", request, result, 1);
+   
+   PyGILState_Release(gstate);
+   if (ret_code == 1) {
       return SYSINFO_RET_OK;
    }
    return SYSINFO_RET_FAIL;
@@ -255,10 +305,10 @@ int	zbx_module_init()
    pythonpath=secure_getenv("PYTHONPATH");
    if (pythonpath == NULL) {
       modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+128);
-      sprintf(modpath, "%s/pymodules", CONFIG_LOAD_MODULE_PATH);
+      sprintf(modpath, "%s/pymodules:%s/pymodules/lib", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH);
    } else  {
-      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+16);
-      sprintf(modpath, "%s/pymodules:%s", CONFIG_LOAD_MODULE_PATH, pythonpath);
+      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+128);
+      sprintf(modpath, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
    } 
    /* printf("*** %s\n", modpath); */
    dlopen(MAIN_PYTHON_LIB, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
@@ -268,7 +318,6 @@ int	zbx_module_init()
    if ((mod = PyImport_ImportModule("ZBX_startup"))!=NULL) {
       fun = PyObject_GetAttrString(mod, "main");
       if (fun == NULL) 	{
-	 printf("1\n");
 	 return ZBX_MODULE_FAIL;
       }
       ctx = PyEval_CallObject(fun, Py_BuildValue("(s)", CONFIG_LOAD_MODULE_PATH));
