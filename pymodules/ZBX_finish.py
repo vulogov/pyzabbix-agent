@@ -1,3 +1,3 @@
-def main(*args):
+def main(ctx):
     print "Python-Zabbix extention is finishing"
-    return "OK"
+    return None

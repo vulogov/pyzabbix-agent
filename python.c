@@ -41,6 +41,7 @@
 
 extern char *CONFIG_LOAD_MODULE_PATH;
 char        *modpath;
+PyObject    *ctx;
 /* the variable keeps timeout setting for item processing */
 static int	item_timeout = 0;
 
@@ -83,9 +84,10 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
       PyErr_Print();
       return 0;
    }
-   param = PyTuple_New(request->nparam-1);
+   param = PyTuple_New(request->nparam);
+   PyTuple_SET_ITEM(param, 0, ctx);
    for (i=1;i<request->nparam;i++) {
-      PyTuple_SET_ITEM(param,i-1,PyString_FromString(get_rparam(request, i)));
+      PyTuple_SET_ITEM(param,i,PyString_FromString(get_rparam(request, i)));
    }
    fun = PyObject_GetAttrString(mod, "main");
    if (fun == NULL) {
@@ -98,6 +100,9 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
       PyErr_Print();
       return 0;
    }
+   Py_DECREF(mod);
+   Py_DECREF(param);
+   Py_DECREF(fun);
    if (PyInt_Check(ret)) {
       SET_UI64_RESULT(result, PyLong_AsLong(ret));
    } else if (PyLong_Check(ret)) {
@@ -109,8 +114,10 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
       SET_STR_RESULT(result, strdup(cstrret));
    } else {
       SET_MSG_RESULT(result, strdup("Python returned unsupported value"));
+      Py_DECREF(ret);
       return 0;
    }
+   Py_DECREF(ret);
    return 1;
 }
 
@@ -259,7 +266,16 @@ int	zbx_module_init()
    PySys_SetPath(modpath);
    if ((mod = PyImport_ImportModule("ZBX_startup"))!=NULL) {
       fun = PyObject_GetAttrString(mod, "main");
-      PyEval_CallObject(fun, Py_BuildValue("(s)", CONFIG_LOAD_MODULE_PATH));
+      if (fun == NULL) 	{
+	 printf("1\n");
+	 return ZBX_MODULE_FAIL;
+      }
+      ctx = PyEval_CallObject(fun, Py_BuildValue("(s)", CONFIG_LOAD_MODULE_PATH));
+      if (ctx == NULL) 	{
+	 PyErr_Print();
+	 return ZBX_MODULE_FAIL;
+      }
+      
    }
    return ZBX_MODULE_OK;
 }
@@ -280,7 +296,8 @@ int	zbx_module_uninit()
    PyObject *mod, *param, *fun;
    if ((mod = PyImport_ImportModule("ZBX_finish"))!=NULL) {
       fun = PyObject_GetAttrString(mod, "main");
-      PyEval_CallObject(fun, Py_BuildValue("(s)", CONFIG_LOAD_MODULE_PATH));
+      if (fun != 0)
+	PyEval_CallObject(fun, Py_BuildValue("(o)", ctx));
    }
    Py_Finalize();
    free(modpath);

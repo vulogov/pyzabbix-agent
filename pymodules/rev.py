@@ -1,2 +1,2 @@
-def main(*args):
+def main(ctx, *args):
     return str(args[::-1])

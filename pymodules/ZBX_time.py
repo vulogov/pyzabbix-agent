@@ -1,3 +1,3 @@
 import time
-def main(*args):
+def main(ctx, *args):
 	return time.time()
