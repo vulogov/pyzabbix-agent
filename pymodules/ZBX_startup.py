@@ -25,6 +25,9 @@ class ZBX_Context:
         c = self.getFromModule("ZBX_cache_%s"%ctype, "Cache")
         if c != None:
             self.cache = c(self)
+        if not self.cache.ready:
+            ## If cache is not ready, we do not have any cache
+            self.cache = None
     def initAgents(self):
         self.agents = {}
         agents = self.cfg["agents/agents"]

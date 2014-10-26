@@ -11,6 +11,7 @@ class Cache:
         except:
             self.expire = 300
         self.cache = {}
+        self.ready = True
     def __setitem__(self, key, val):
         self.cache[key] = (time.time(), val)
     def __getitem__(self, key):

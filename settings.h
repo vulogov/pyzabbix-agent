@@ -1,1 +1,1 @@
-#define HAVE_SECURE_GETENV 0
+#define HAVE_SECURE_GETENV 1

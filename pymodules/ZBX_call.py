@@ -17,6 +17,8 @@ def main(ctx, cmd, *args):
     if ctx.agents.has_key(name):
         try:
             ret = apply(getattr(ctx.agents[name], method), (ctx,)+args)
+            if ctx.cache:
+                ctx.cache["%s/%s"%(ctx.name, cmd)] = ret
             return (1,ret,None)
         except:
             return (0,"Python agent trew traceback",traceback.format_exc())
@@ -32,6 +34,6 @@ def main(ctx, cmd, *args):
             ret = apply(getattr(mod, method), (ctx,)+args)
             if ctx.cache:
                 ctx.cache["%s/%s"%(ctx.name, cmd)] = ret
-        except:
+        except KeybaordInterrupt:
             return (0,"Python module threw traceback",traceback.format_exc())
         return (1, ret, None)

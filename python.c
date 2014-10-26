@@ -351,9 +351,19 @@ int	zbx_module_uninit()
    PyObject *mod, *param, *fun;
    if ((mod = PyImport_ImportModule("ZBX_finish"))!=NULL) {
       fun = PyObject_GetAttrString(mod, "main");
-      if (fun != 0)
-	PyEval_CallObject(fun, Py_BuildValue("(o)", ctx));
+      if (fun != 0) {
+	 /* PyObject_Print(ctx,stdout, 0); */
+	 param = PyTuple_New(1);
+	 if (param != NULL)   {
+	    PyTuple_SetItem(param, 0, ctx);
+	    PyEval_CallObject(fun, param);
+	    Py_DECREF(param);
+	 }
+	 Py_DECREF(fun);
+      }
+      Py_DECREF(mod);
    }
+   Py_DECREF(ctx);
    Py_Finalize();
    free(modpath);
    return ZBX_MODULE_OK;
