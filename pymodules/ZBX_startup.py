@@ -17,6 +17,7 @@ class ZBX_Context:
             self.name = socket.gethostname().lower()
         self.initCache()
         self.initAgents()
+        self.initRedisQueue()
     def initCache(self):
         self.cache = None
         ctype = self.cfg["cache/type"]
@@ -41,6 +42,20 @@ class ZBX_Context:
                     continue
                 self.agents[_a] = c(self)
                 print "Agent %s installed:"%_a,self.agents[_a].desc()
+    def initRedisQueue(self):
+        import redis
+        self.redis_queue = None
+        isRedis = self.cfg["main/redis"]
+        if isRedis and isRedis.strip().lower() == "yes":
+            try:
+                self.redis_queue = redis.StrictRedis(host=self.cfg["redis/server"], port=6379, db=0)
+                q = self.cfg["redis/queues"]
+                self.redis_queues = q.split(",")
+                print "Redis queue is supported"
+            except:
+                self.queue = None
+        if not self.redis_queue:
+            print "Redis queue will not be supported"
     def getFromModule(self, modname, attrname):
         fp, pathname, description = imp.find_module(modname)
         try:

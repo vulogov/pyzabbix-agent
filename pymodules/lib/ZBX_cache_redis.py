@@ -20,7 +20,6 @@ class Cache:
         except KeyboardInterrupt:            
             self.ready = False
     def __setitem__(self, key, val):
-        print "!!!",key
         self.cache.set(key, pickle.dumps(val))
         self.cache.expire(key, self.expire)
     def __getitem__(self, key):

@@ -1,5 +1,9 @@
 import imp
 import traceback
+try:
+    import cPickle as pickle
+except:
+    import pickle
 
 def main(ctx, cmd, *args):
     if ctx.cache:
@@ -15,6 +19,7 @@ def main(ctx, cmd, *args):
         method = "main"
     params = p_cmd[2:]
     if ctx.agents.has_key(name):
+        ## Try pre-spawned agent
         try:
             ret = apply(getattr(ctx.agents[name], method), (ctx,)+args)
             if ctx.cache:
@@ -22,8 +27,25 @@ def main(ctx, cmd, *args):
             return (1,ret,None)
         except:
             return (0,"Python agent trew traceback",traceback.format_exc())
+    elif ctx.redis_queue.exists("%s/%s"%(ctx.name, cmd)) or ctx.redis_queue.exists(cmd) or "%s/%s"%(ctx.name, cmd) in ctx.redis_queues or cmd in ctx.redis_queues:
+        ## Try Redis queue
+        try:
+            ret = None
+            for qname in ["%s/%s"%(ctx.name, cmd), cmd]:
+                ret = ctx.redis_queue.lpop(qname)
+                if ret:
+                    break
+            if not ret:
+                return (0, ret, "No data from Redis")
+            else:
+                return (1, pickle.loads(ret), None)
+        except KeyboardInterrupt:
+            return (0, ret, "No data from Redis")
     else:
-        fp, pathname, description = imp.find_module(name)
+        try:
+            fp, pathname, description = imp.find_module(name)
+        except:
+            return (0,"Python module not exists",traceback.format_exc())
         try:
             mod = imp.load_module(name, fp, pathname, description)
         except:
@@ -34,6 +56,6 @@ def main(ctx, cmd, *args):
             ret = apply(getattr(mod, method), (ctx,)+args)
             if ctx.cache:
                 ctx.cache["%s/%s"%(ctx.name, cmd)] = ret
-        except KeybaordInterrupt:
+        except:
             return (0,"Python module threw traceback",traceback.format_exc())
         return (1, ret, None)
