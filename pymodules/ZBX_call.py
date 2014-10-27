@@ -1,6 +1,11 @@
 import imp
 
 def main(ctx, cmd, *args):
+    if ctx.cache:
+        ## Check the cache first
+        ret = ctx.cache["%s/%s"%(ctx.name, cmd)]
+        if ret:
+            return (1, ret, None)
     p_cmd = cmd.split(".")
     name = p_cmd[0]
     try:
@@ -23,6 +28,8 @@ def main(ctx, cmd, *args):
             fp.close()
         try:
             ret = apply(getattr(mod, method), (ctx,)+args)
+            if ctx.cache:
+                ctx.cache["%s/%s"%(ctx.name, cmd)] = ret
         except:
             return (0,"Python module threw traceback",traceback.format_exc())
         return (1, ret, None)

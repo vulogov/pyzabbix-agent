@@ -25,6 +25,7 @@
 
 
 #include "pyzabbix_cfg.h"
+#include "settings.h"
 
 
 #include "sysinc.h"
@@ -302,7 +303,11 @@ int	zbx_module_init()
 {
    PyObject *mod, *param, *fun;
    char *pythonpath;
+   #if HAVE_SECURE_GETENV==1
    pythonpath=secure_getenv("PYTHONPATH");
+   #else
+   pythonpath=getenv("PYTHONPATH");
+   #endif
    if (pythonpath == NULL) {
       modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+128);
       sprintf(modpath, "%s/pymodules:%s/pymodules/lib", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH);
