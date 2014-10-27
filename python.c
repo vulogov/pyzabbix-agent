@@ -134,7 +134,7 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
    Py_DECREF(param);
    Py_DECREF(fun);
    
-   if (PyTuple_Check(ret)) {
+   if (PyTuple_Check(ret) && PyTuple_Size(ret) == 3) {
       long wrapper_ret_code;
       wrapper_ret_code = PyLong_AsLong(PyTuple_GetItem(ret, 0));
       if ( wrapper_ret_code == 0 ) {
