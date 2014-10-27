@@ -15,8 +15,8 @@ class ZBX_Context:
         if not self.name or self.name == "hostname":
             import socket
             self.name = socket.gethostname().lower()
-        self.agents = {}
         self.initCache()
+        self.initAgents()
     def initCache(self):
         self.cache = None
         ctype = self.cfg["cache/type"]
@@ -25,6 +25,19 @@ class ZBX_Context:
         c = self.getFromModule("ZBX_cache_%s"%ctype, "Cache")
         if c != None:
             self.cache = c(self)
+    def initAgents(self):
+        self.agents = {}
+        agents = self.cfg["agents/agents"]
+        if agents:
+            agent = agents.split(",")
+            for a in agent:
+                _a = a.strip().lower()
+                m = "ZBX_agent_%s"%_a
+                c = self.getFromModule(m, "Agent")
+                if not c:
+                    continue
+                self.agents[_a] = c(self)
+                print "Agent %s installed:"%_a,self.agents[_a].desc()
     def getFromModule(self, modname, attrname):
         fp, pathname, description = imp.find_module(modname)
         try:

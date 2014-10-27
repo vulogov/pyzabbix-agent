@@ -1,4 +1,5 @@
 import imp
+import traceback
 
 def main(ctx, cmd, *args):
     if ctx.cache:
@@ -16,6 +17,7 @@ def main(ctx, cmd, *args):
     if ctx.agents.has_key(name):
         try:
             ret = apply(getattr(ctx.agents[name], method), (ctx,)+args)
+            return (1,ret,None)
         except:
             return (0,"Python agent trew traceback",traceback.format_exc())
     else:
