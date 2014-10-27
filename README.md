@@ -56,10 +56,10 @@ These modules perform some special actions.
 
 The following item keys are supported:
 
-* python.ping - no parameters. Return 1 if embedded Python is initialized
-* python.version - returns version of the embedded Python interpreter
-* python - calling the Python Zabbix module. The first parameter is the
+* `python.ping` - no parameters. Return 1 if embedded Python is initialized
+* `python.version` - returns version of the embedded Python interpreter
+* `python` - calling the Python Zabbix module. The first parameter is the
 name of the module, the next parameters will be passed to the main()
 function of the module.
-* python.prof - same as python, but instead returning the value, returns
+* `python.prof` - same as `python`, but instead returning the value, returns
 execution time of the module in miliseconds.
