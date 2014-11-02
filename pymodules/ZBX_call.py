@@ -39,7 +39,7 @@ def main(ctx, cmd, *args):
                 return (0, ret, "No data from Redis")
             else:
                 return (1, pickle.loads(ret), None)
-        except KeyboardInterrupt:
+        except:
             return (0, ret, "No data from Redis")
     else:
         try:

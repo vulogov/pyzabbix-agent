@@ -63,3 +63,7 @@ name of the module, the next parameters will be passed to the main()
 function of the module.
 * `python.prof` - same as `python`, but instead returning the value, returns
 execution time of the module in miliseconds.
+* `py[]` - same as `python[]`, but wrapping module interface through ZBX_call.py. 
+In addition to a calling `main()` function of the module, can call any
+function and also read data from pre-spawned agents and a Redis queues.
+
