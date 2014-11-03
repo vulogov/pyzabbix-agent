@@ -15,6 +15,8 @@ class ZBX_Context:
         if not self.name or self.name == "hostname":
             import socket
             self.name = socket.gethostname().lower()
+        import sys
+        print sys.path
         self.initCache()
         self.initAgents()
         self.initRedisQueue()

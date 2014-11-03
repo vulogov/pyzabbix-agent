@@ -309,11 +309,11 @@ int	zbx_module_init()
    pythonpath=getenv("PYTHONPATH");
    #endif
    if (pythonpath == NULL) {
-      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+128);
-      sprintf(modpath, "%s/pymodules:%s/pymodules/lib", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH);
+      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+4096);
+      snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH);
    } else  {
-      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+128);
-      sprintf(modpath, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
+      modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+4096);
+      snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
    } 
    /* printf("*** %s\n", modpath); */
    dlopen(MAIN_PYTHON_LIB, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
