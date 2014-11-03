@@ -269,14 +269,14 @@ int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result)
  
    PyGILState_STATE gstate;
    gstate = PyGILState_Ensure();
-   
+   Py_INCREF(ctx);
    if (request->nparam < 1) {
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
       return SYSINFO_RET_FAIL;
    }
 
    ret_code = zbx_python_call_module("ZBX_call", request, result, 1);
-   
+   Py_DECREF(ctx);
    PyGILState_Release(gstate);
    if (ret_code == 1) {
       return SYSINFO_RET_OK;
@@ -330,7 +330,7 @@ int	zbx_module_init()
 	 PyErr_Print();
 	 return ZBX_MODULE_FAIL;
       }
-      
+      Py_INCREF(ctx);
    }
    return ZBX_MODULE_OK;
 }
