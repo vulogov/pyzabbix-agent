@@ -129,7 +129,6 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
       PyErr_Print();
       return 0;
    }
-   
    Py_DECREF(mod);
    Py_DECREF(param);
    Py_DECREF(fun);
@@ -221,6 +220,7 @@ int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result)
 {
    int ret_code;
    PyGILState_STATE gstate;
+   Py_INCREF(ctx);
    gstate = PyGILState_Ensure();
    if (request->nparam < 1) {
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
@@ -229,6 +229,7 @@ int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result)
    ret_code = zbx_python_call_module(get_rparam(request, 0), request, result, 0);
    /* printf("@@@ %d\n", ret_code); */
    PyGILState_Release(gstate);
+   Py_DECREF(ctx);
    if (ret_code == 1) {
       return SYSINFO_RET_OK;
    }
@@ -245,6 +246,7 @@ int	zbx_module_python_call_prof(AGENT_REQUEST *request, AGENT_RESULT *result)
    gettimeofday(&tv1,NULL);
    start = tv1.tv_sec*(uint64_t)1000000+tv1.tv_usec;
    PyGILState_STATE gstate;
+   Py_INCREF(ctx);
    gstate = PyGILState_Ensure();
    if (request->nparam < 1) {
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
@@ -253,6 +255,7 @@ int	zbx_module_python_call_prof(AGENT_REQUEST *request, AGENT_RESULT *result)
    ret_code = zbx_python_call_module(get_rparam(request, 0), request, result, 0);
    
    PyGILState_Release(gstate);
+   Py_DECREF(ctx);
    gettimeofday(&tv2,NULL);
    end = tv2.tv_sec*(uint64_t)1000000+tv2.tv_usec;
    if (ret_code == 1) {
@@ -268,16 +271,20 @@ int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result)
    int ret_code;
  
    PyGILState_STATE gstate;
-   gstate = PyGILState_Ensure();
+   if (ctx == NULL)   {
+      SET_MSG_RESULT(result, strdup("System error: Context reference is NULL"));
+      return SYSINFO_RET_FAIL;
+   }
    Py_INCREF(ctx);
+   gstate = PyGILState_Ensure();
    if (request->nparam < 1) {
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
       return SYSINFO_RET_FAIL;
    }
 
    ret_code = zbx_python_call_module("ZBX_call", request, result, 1);
-   Py_DECREF(ctx);
    PyGILState_Release(gstate);
+   Py_DECREF(ctx);
    if (ret_code == 1) {
       return SYSINFO_RET_OK;
    }
@@ -308,24 +315,39 @@ int	zbx_module_init()
    #else
    pythonpath=getenv("PYTHONPATH");
    #endif
+   /* printf("%s\n", CONFIG_LOAD_MODULE_PATH); */
    if (pythonpath == NULL) {
+      FILE *getpath;
+      
+      if ((getpath = popen("python -c \"import sys; print ':'.join(sys.path)\"", "r")) == NULL) {
+	 return ZBX_MODULE_FAIL;
+      }
+      if ((pythonpath = malloc(4000)) == NULL)
+	return ZBX_MODULE_FAIL;
+      if (fgets(pythonpath, 4000, getpath) == NULL)
+	return ZBX_MODULE_FAIL;
+      pclose(getpath);
       modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+4096);
-      snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH);
+      snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH,pythonpath);
+      free(pythonpath);
    } else  {
       modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+4096);
       snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
    } 
-   /* printf("*** %s\n", modpath); */
+   /*printf("*** %s\n", modpath);*/
    dlopen(MAIN_PYTHON_LIB, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
    Py_SetProgramName("zabbix_agentd");
    Py_Initialize();
    PySys_SetPath(modpath);
+   /*printf("1\n");*/
    if ((mod = PyImport_ImportModule("ZBX_startup"))!=NULL) {
+      /* printf("mod: %x\n", mod); */
       fun = PyObject_GetAttrString(mod, "main");
       if (fun == NULL) 	{
 	 return ZBX_MODULE_FAIL;
       }
       ctx = PyEval_CallObject(fun, Py_BuildValue("(s)", CONFIG_LOAD_MODULE_PATH));
+      /* printf("%x\n", ctx); */
       if (ctx == NULL) 	{
 	 PyErr_Print();
 	 return ZBX_MODULE_FAIL;
@@ -349,7 +371,7 @@ int	zbx_module_init()
 int	zbx_module_uninit()
 {
    PyObject *mod, *param, *fun;
-   if ((mod = PyImport_ImportModule("ZBX_finish"))!=NULL) {
+   if ((mod = PyImport_ImportModule("ZBX_finish"))!=NULL && (ctx != NULL)) {
       fun = PyObject_GetAttrString(mod, "main");
       if (fun != 0) {
 	 /* PyObject_Print(ctx,stdout, 0); */
@@ -363,7 +385,9 @@ int	zbx_module_uninit()
       }
       Py_DECREF(mod);
    }
-   Py_DECREF(ctx);
+   if (ctx != NULL)   {
+      Py_DECREF(ctx);
+   }
    Py_Finalize();
    free(modpath);
    return ZBX_MODULE_OK;

@@ -16,7 +16,7 @@ class ZBX_Context:
             import socket
             self.name = socket.gethostname().lower()
         import sys
-        print sys.path
+        # print sys.path
         self.initCache()
         self.initAgents()
         self.initRedisQueue()
