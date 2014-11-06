@@ -262,12 +262,13 @@ int	zbx_module_python_call(AGENT_REQUEST *request, AGENT_RESULT *result)
 {
    int ret_code;
    PyGILState_STATE gstate;
-   Py_INCREF(ctx);
-   gstate = PyGILState_Ensure();
-   if (request->nparam < 1) {
+
+   if ((request->nparam < 1)  || (strlen(get_rparam(request, 0)) == 0)) {
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
       return SYSINFO_RET_FAIL;
    }
+   Py_INCREF(ctx);
+   gstate = PyGILState_Ensure();
    ret_code = zbx_python_call_module(get_rparam(request, 0), request, result, 0);
    /* printf("@@@ %d\n", ret_code); */
    PyGILState_Release(gstate);
@@ -288,12 +289,13 @@ int	zbx_module_python_call_prof(AGENT_REQUEST *request, AGENT_RESULT *result)
    gettimeofday(&tv1,NULL);
    start = tv1.tv_sec*(uint64_t)1000000+tv1.tv_usec;
    PyGILState_STATE gstate;
-   Py_INCREF(ctx);
-   gstate = PyGILState_Ensure();
-   if (request->nparam < 1) {
+   
+   if ((request->nparam < 1)  || (strlen(get_rparam(request, 0)) == 0)) {
       SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
       return SYSINFO_RET_FAIL;
    }
+   Py_INCREF(ctx);
+   gstate = PyGILState_Ensure();
    ret_code = zbx_python_call_module(get_rparam(request, 0), request, result, 0);
    
    PyGILState_Release(gstate);
@@ -313,10 +315,17 @@ int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result)
    int ret_code;
  
    PyGILState_STATE gstate;
+   
    if (ctx == NULL)   {
       SET_MSG_RESULT(result, strdup("System error: Context reference is NULL"));
       return SYSINFO_RET_FAIL;
    }
+   
+   if ((request->nparam < 1) || (strlen(get_rparam(request, 0)) == 0))   {
+      SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
+      return SYSINFO_RET_FAIL;
+   }
+
    Py_INCREF(ctx);
    gstate = PyGILState_Ensure();
    if (request->nparam < 1) {
