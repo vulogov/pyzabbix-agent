@@ -24,7 +24,6 @@
 */
 
 
-#include "pyzabbix_cfg.h"
 #include "settings.h"
 
 
@@ -35,8 +34,12 @@
 #include <Python.h>
 #include <frameobject.h>
 
+#define BUFSIZE 4096
+
 extern char *CONFIG_LOAD_MODULE_PATH;
 char        *modpath;
+char        *pythoncmdpath;
+char        *lib_path;
 PyObject    *ctx;
 /* the variable keeps timeout setting for item processing */
 static int	item_timeout = 0;
@@ -59,6 +62,45 @@ static ZBX_METRIC keys[] =
    {"python.prof",	CF_HAVEPARAMS,	zbx_module_python_call_prof, ""},
    {NULL}
 };
+
+/* Discovery functions */
+
+char *read_line_from_cmd(char* cmd) {
+   FILE *f;
+   char *buf;
+   if ((f = popen(cmd, "r")) == NULL)
+     return NULL;
+   if ((buf = malloc(BUFSIZE)) == NULL)
+     return NULL;
+   if(fgets(buf, BUFSIZE, f) == NULL)   {
+      free(buf);
+      return NULL;
+   }
+   pclose(f);
+   return buf;
+   
+}
+
+char *discover_python() {
+   if ((pythoncmdpath = read_line_from_cmd("/bin/bash -c \"type -p python\"")) == NULL)
+     return NULL;
+   pythoncmdpath[strlen(pythoncmdpath)-1] = '\0';
+   return pythoncmdpath;
+}
+
+char *discover_python_lib() {
+   char cmd[BUFSIZE];
+   
+   if ((pythoncmdpath = discover_python()) == NULL)
+     return NULL;
+   snprintf(cmd, BUFSIZE, "ldd %s|grep python|cut -f 3 -d \" \"", pythoncmdpath);
+   if ((lib_path = read_line_from_cmd(cmd)) == NULL)  
+     return NULL;
+   lib_path[strlen(lib_path)-1] = '\0';
+   return lib_path;
+}
+
+
 
 
 
@@ -335,7 +377,12 @@ int	zbx_module_init()
       snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
    } 
    /*printf("*** %s\n", modpath);*/
-   dlopen(MAIN_PYTHON_LIB, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
+   if (discover_python_lib() == NULL) {
+      return ZBX_MODULE_FAIL;
+   }
+   free(pythoncmdpath);
+   free(lib_path);
+   dlopen(lib_path, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
    Py_SetProgramName("zabbix_agentd");
    Py_Initialize();
    PySys_SetPath(modpath);

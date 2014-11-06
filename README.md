@@ -10,8 +10,6 @@ loading of the interpreter.
 At this moment, I do not recommend to use this module in a production
 environment. There are bugs. There are undetected issues.
 
-* Run `./configure` script.
-
 * Check the include path and compilation parameters in `Makefile`
 and run `make`.
 
@@ -26,11 +24,14 @@ configuration file is installed
 * Add `LoadModule=python.so` in your `zabbix_agentd.conf`.
 
 
-* Set the `PYTHONPATH` as: 
+* Set the `PYTHONPATH` as:
 
 ```
 export PYTHONPATH=`python -c "import sys; print ':'.join(sys.path)"`
 ```
+
+This is not mandatory anymore, if PYTHONPATH is not defined, module
+will discover it from Python interpreter.
 
 * Restart `zabbix_agentd`
 
