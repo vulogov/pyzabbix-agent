@@ -360,6 +360,7 @@ int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result)
 int	zbx_module_init()
 {
    PyObject *mod, *param, *fun;
+   char     cmd[BUFSIZE];
    char *pythonpath;
    #if HAVE_SECURE_GETENV==1
    pythonpath=secure_getenv("PYTHONPATH");
@@ -367,10 +368,14 @@ int	zbx_module_init()
    pythonpath=getenv("PYTHONPATH");
    #endif
    /* printf("%s\n", CONFIG_LOAD_MODULE_PATH); */
+   if (discover_python_lib() == NULL) {
+      return ZBX_MODULE_FAIL;
+   }
+   
    if (pythonpath == NULL) {
       FILE *getpath;
-      
-      if ((getpath = popen("python -c \"import sys; print ':'.join(sys.path)\"", "r")) == NULL) {
+      snprintf(cmd, BUFSIZE, "%s -c \"import sys; print ':'.join(sys.path)\"",  pythoncmdpath);
+      if ((getpath = popen(cmd, "r")) == NULL) {
 	 return ZBX_MODULE_FAIL;
       }
       if ((pythonpath = malloc(4000)) == NULL)
@@ -386,12 +391,13 @@ int	zbx_module_init()
       snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
    } 
    /*printf("*** %s\n", modpath);*/
-   if (discover_python_lib() == NULL) {
+   if (dlopen(lib_path, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL) == NULL)   {
+      free(pythoncmdpath);
+      free(lib_path);
       return ZBX_MODULE_FAIL;
    }
    free(pythoncmdpath);
    free(lib_path);
-   dlopen(lib_path, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
    Py_SetProgramName("zabbix_agentd");
    Py_Initialize();
    PySys_SetPath(modpath);
