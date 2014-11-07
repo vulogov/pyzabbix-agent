@@ -1,0 +1,23 @@
+Here is short introduction on how to write Python modules which will
+be callable from the Zabbix agent.
+
+* How to write the module.
+
+Create file called {modulename}.py, where is the name of your module
+in the directory pymodules. This directory shall be created as
+subdirectory of where you keep the configuration file for you Zabbix
+agent (zabbix_agentd.conf).
+
+In this file, define at least one function: main().
+
+The first parameter which will be always passed to a function is a
+reference on your Python execution context. This object is ceated in
+ZBX_startup.py and returned it its main function and stored as
+PyObject *ctx within python.so
+
+All other parameters they are whan you pass from the Zabbix call
+
+* How to call an object
+
+Zabbix agent passive: py[param1, param2, param3]
+
