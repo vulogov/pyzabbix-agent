@@ -1,5 +1,6 @@
 import imp
 import traceback
+import posixpath
 try:
     import cPickle as pickle
 except:
@@ -27,7 +28,7 @@ def main(ctx, cmd, *args):
             return (1,ret,None)
         except:
             return (0,"Python agent trew traceback",traceback.format_exc())
-    elif ctx.redis_queue.exists("%s/%s"%(ctx.name, cmd)) or ctx.redis_queue.exists(cmd) or "%s/%s"%(ctx.name, cmd) in ctx.redis_queues or cmd in ctx.redis_queues:
+    elif ctx.redis_queue and (ctx.redis_queue.exists("%s/%s"%(ctx.name, cmd)) or ctx.redis_queue.exists(cmd) or "%s/%s"%(ctx.name, cmd) in ctx.redis_queues or (cmd in ctx.redis_queues)):
         ## Try Redis queue
         try:
             ret = None
@@ -44,6 +45,9 @@ def main(ctx, cmd, *args):
     else:
         try:
             fp, pathname, description = imp.find_module(name)
+            if posixpath.dirname(pathname).split("/")[-1] != "pymodules":
+                ## If discovered module isn't in pymodules, we don't want to call it
+                raise ImportError, name
         except:
             return (0,"Python module not exists",traceback.format_exc())
         try:

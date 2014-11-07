@@ -23,6 +23,9 @@ class ZBX_Context:
     def initCache(self):
         self.cache = None
         ctype = self.cfg["cache/type"]
+        if self.cfg["cache/enable"].lower() == "no":
+            ## Cache is disabled
+            return
         if not ctype:
             ctype="internal"
         c = self.getFromModule("ZBX_cache_%s"%ctype, "Cache")
