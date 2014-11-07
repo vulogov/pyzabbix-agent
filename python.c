@@ -390,18 +390,30 @@ int	zbx_module_init()
       modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+4096);
       snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
    } 
-   /*printf("*** %s\n", modpath);*/
+
+
    if (dlopen(lib_path, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL) == NULL)   {
       free(pythoncmdpath);
       free(lib_path);
       return ZBX_MODULE_FAIL;
    }
+   
+   /* We do not need those anymode */
    free(pythoncmdpath);
    free(lib_path);
+   
+   /* Set-up Python environment */
    Py_SetProgramName("zabbix_agentd");
    Py_Initialize();
+   if (Py_IsInitialized() == 0) {
+      /* Python initialization had failed */
+      return ZBX_MODULE_FAIL;
+   }
+   /* printf("*** %s\n", modpath); */
    PySys_SetPath(modpath);
-   /*printf("1\n");*/
+   /* printf("1\n"); */
+   
+   
    if ((mod = PyImport_ImportModule("ZBX_startup"))!=NULL) {
       /* printf("mod: %x\n", mod); */
       fun = PyObject_GetAttrString(mod, "main");
