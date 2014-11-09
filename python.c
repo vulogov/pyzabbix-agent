@@ -28,7 +28,10 @@
 
 
 #include "sysinc.h"
+#include "common.h"
 #include "module.h"
+#include "cfg.h"
+#include "log.h"
 #include <time.h>
 #include <dlfcn.h>
 #include <Python.h>
@@ -38,8 +41,8 @@
 
 extern char *CONFIG_LOAD_MODULE_PATH;
 char        *modpath;
-char        *pythoncmdpath;
-char        *lib_path;
+char        *lib_path = NULL;
+char        *python_path = NULL;
 PyObject    *ctx;
 /* the variable keeps timeout setting for item processing */
 static int	item_timeout = 0;
@@ -63,41 +66,20 @@ static ZBX_METRIC keys[] =
    {NULL}
 };
 
-/* Discovery functions */
 
-char *read_line_from_cmd(char* cmd) {
-   FILE *f;
-   char *buf;
-   if ((f = popen(cmd, "r")) == NULL)
-     return NULL;
-   if ((buf = malloc(BUFSIZE)) == NULL)
-     return NULL;
-   if(fgets(buf, BUFSIZE, f) == NULL)   {
-      free(buf);
-      return NULL;
-   }
-   pclose(f);
-   return buf;
-   
-}
+/* Read Python enviroment from configuration file */
 
-char *discover_python() {
-   if ((pythoncmdpath = read_line_from_cmd("/bin/bash -c \"type -p python\"")) == NULL)
-     return NULL;
-   pythoncmdpath[strlen(pythoncmdpath)-1] = '\0';
-   return pythoncmdpath;
-}
-
-char *discover_python_lib() {
-   char cmd[BUFSIZE];
-   
-   if ((pythoncmdpath = discover_python()) == NULL)
-     return NULL;
-   snprintf(cmd, BUFSIZE, "ldd %s|grep python|cut -f 3 -d \" \"", pythoncmdpath);
-   if ((lib_path = read_line_from_cmd(cmd)) == NULL)  
-     return NULL;
-   lib_path[strlen(lib_path)-1] = '\0';
-   return lib_path;
+void load_python_env_config(void)  {
+   char conf_file[BUFSIZE];
+   static struct cfg_line cfg[] = 
+     {
+	{ "PYTHONPATH", &python_path, TYPE_STRING, PARM_MAND, 0, 0 },
+	{ "PYTHONLIB", &lib_path, TYPE_STRING, PARM_MAND, 0, 0 },
+	{ NULL },
+     };
+   zbx_snprintf(conf_file, BUFSIZE, "%s/python.cfg", CONFIG_LOAD_MODULE_PATH);
+   parse_cfg_file(conf_file, cfg, ZBX_CFG_FILE_OPTIONAL, ZBX_CFG_STRICT);
+   /* printf("%s %s %s\n", conf_file, lib_path, python_path); */
 }
 
 
@@ -171,9 +153,10 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
       PyErr_Print();
       return 0;
    }
+   
    Py_DECREF(mod);
-   Py_DECREF(param);
-   Py_DECREF(fun);
+   /* Py_DECREF(param);
+   Py_DECREF(fun);*/
    
    if (PyTuple_Check(ret) && PyTuple_Size(ret) == 3) {
       long wrapper_ret_code;
@@ -328,11 +311,6 @@ int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result)
 
    Py_INCREF(ctx);
    gstate = PyGILState_Ensure();
-   if (request->nparam < 1) {
-      SET_MSG_RESULT(result, strdup("Invalid number of parameters."));
-      return SYSINFO_RET_FAIL;
-   }
-
    ret_code = zbx_python_call_module("ZBX_call", request, result, 1);
    PyGILState_Release(gstate);
    Py_DECREF(ctx);
@@ -360,46 +338,39 @@ int	zbx_module_python_call_wrap(AGENT_REQUEST *request, AGENT_RESULT *result)
 int	zbx_module_init()
 {
    PyObject *mod, *param, *fun;
-   char     cmd[BUFSIZE];
+   char error[MAX_STRING_LEN];
+   char cmd[BUFSIZE];
    char *pythonpath;
    #if HAVE_SECURE_GETENV==1
    pythonpath=secure_getenv("PYTHONPATH");
    #else
    pythonpath=getenv("PYTHONPATH");
    #endif
-   /* printf("%s\n", CONFIG_LOAD_MODULE_PATH); */
-   if (discover_python_lib() == NULL) {
-      return ZBX_MODULE_FAIL;
-   }
+   
+   /* printf("Begin: %s\n", CONFIG_LOAD_MODULE_PATH); */
+   load_python_env_config();
+   if (lib_path == NULL)
+     return ZBX_MODULE_FAIL;
    
    if (pythonpath == NULL) {
-      FILE *getpath;
-      snprintf(cmd, BUFSIZE, "%s -c \"import sys; print ':'.join(sys.path)\"",  pythoncmdpath);
-      if ((getpath = popen(cmd, "r")) == NULL) {
+      if (python_path == NULL) {
 	 return ZBX_MODULE_FAIL;
       }
-      if ((pythonpath = malloc(4000)) == NULL)
-	return ZBX_MODULE_FAIL;
-      if (fgets(pythonpath, 4000, getpath) == NULL)
-	return ZBX_MODULE_FAIL;
-      pclose(getpath);
       modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+4096);
-      snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH,pythonpath);
-      free(pythonpath);
+      zbx_snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH,python_path);
+      free(python_path); 
    } else  {
       modpath=malloc(strlen(CONFIG_LOAD_MODULE_PATH)+strlen(pythonpath)+4096);
-      snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
+      zbx_snprintf(modpath, 4096, "%s/pymodules:%s/pymodules/lib:%s", CONFIG_LOAD_MODULE_PATH, CONFIG_LOAD_MODULE_PATH, pythonpath);
    } 
 
 
    if (dlopen(lib_path, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL) == NULL)   {
-      free(pythoncmdpath);
       free(lib_path);
       return ZBX_MODULE_FAIL;
    }
    
    /* We do not need those anymode */
-   free(pythoncmdpath);
    free(lib_path);
    
    /* Set-up Python environment */
@@ -413,21 +384,23 @@ int	zbx_module_init()
    PySys_SetPath(modpath);
    /* printf("1\n"); */
    
-   
+   zabbix_log(LOG_LEVEL_WARNING, "Executing ZBX_startup");
    if ((mod = PyImport_ImportModule("ZBX_startup"))!=NULL) {
-      /* printf("mod: %x\n", mod); */
+      zabbix_log(LOG_LEVEL_WARNING, "mod: %x", mod); 
       fun = PyObject_GetAttrString(mod, "main");
       if (fun == NULL) 	{
 	 return ZBX_MODULE_FAIL;
       }
+      zabbix_log(LOG_LEVEL_WARNING, "FUN: %x", fun);
       ctx = PyEval_CallObject(fun, Py_BuildValue("(s)", CONFIG_LOAD_MODULE_PATH));
-      /* printf("%x\n", ctx); */
+      zabbix_log(LOG_LEVEL_WARNING, "CTX: %x", ctx);
       if (ctx == NULL) 	{
 	 PyErr_Print();
 	 return ZBX_MODULE_FAIL;
       }
       Py_INCREF(ctx);
    }
+   printf("init fin\n");
    return ZBX_MODULE_OK;
 }
 

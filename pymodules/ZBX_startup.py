@@ -48,17 +48,18 @@ class ZBX_Context:
                 self.agents[_a] = c(self)
                 print "Agent %s installed:"%_a,self.agents[_a].desc()
     def initRedisQueue(self):
-        import redis
+        #import redis
         self.redis_queue = None
         isRedis = self.cfg["main/redis"]
-        if isRedis and isRedis.strip().lower() == "yes":
-            try:
-                self.redis_queue = redis.StrictRedis(host=self.cfg["redis/server"], port=6379, db=0)
-                q = self.cfg["redis/queues"]
-                self.redis_queues = q.split(",")
-                print "Redis queue is supported"
-            except:
-                self.queue = None
+        #print "Redis!"
+        #if isRedis and isRedis.strip().lower() == "yes":
+        #    try:
+        #        self.redis_queue = redis.StrictRedis(host=self.cfg["redis/server"], port=6379, db=0)
+        #        q = self.cfg["redis/queues"]
+        #        self.redis_queues = q.split(",")
+        #        print "Redis queue is supported"
+        #    except:
+        #        self.queue = None
         if not self.redis_queue:
             print "Redis queue will not be supported"
     def getFromModule(self, modname, attrname):
@@ -78,5 +79,11 @@ class ZBX_Context:
         self.agents[name] = _class(ctx)
 
 def main(cfg_path):
+    import traceback
     print "Python-Zabbix extention is initialized"
-    return ZBX_Context(cfg_path)
+    try:
+        ctx =  ZBX_Context(cfg_path)
+        print "Python-Zabbix ",ctx
+    except:
+        traceback.format_exc()
+    return ctx
