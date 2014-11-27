@@ -155,8 +155,7 @@ int zbx_python_call_module(char* modname, AGENT_REQUEST *request, AGENT_RESULT *
    }
    
    Py_DECREF(mod);
-   /* Py_DECREF(param);
-   Py_DECREF(fun);*/
+   Py_DECREF(fun);
    
    if (PyTuple_Check(ret) && PyTuple_Size(ret) == 3) {
       long wrapper_ret_code;
@@ -380,7 +379,7 @@ int	zbx_module_init()
       /* Python initialization had failed */
       return ZBX_MODULE_FAIL;
    }
-   /* printf("*** %s\n", modpath); */
+   printf("*** %s\n", modpath); 
    PySys_SetPath(modpath);
    /* printf("1\n"); */
    
@@ -400,7 +399,7 @@ int	zbx_module_init()
       }
       Py_INCREF(ctx);
    }
-   printf("init fin\n");
+   /* printf("init fin\n"); */
    return ZBX_MODULE_OK;
 }
 

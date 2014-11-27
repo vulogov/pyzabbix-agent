@@ -7,6 +7,7 @@ except:
     import pickle
 
 def main(ctx, cmd, *args):
+    # print "***",ctx
     if ctx.cache:
         ## Check the cache first
         ret = ctx.cache["%s/%s"%(ctx.name, cmd)]

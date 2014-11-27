@@ -5,6 +5,7 @@
 
 import imp
 from ZBX_ini import ZBX_ini
+#import redis
 
 
 class ZBX_Context:
@@ -48,18 +49,21 @@ class ZBX_Context:
                 self.agents[_a] = c(self)
                 print "Agent %s installed:"%_a,self.agents[_a].desc()
     def initRedisQueue(self):
-        #import redis
         self.redis_queue = None
+        try:
+            import desir
+        except:
+            isRedis = False
+            return        
         isRedis = self.cfg["main/redis"]
-        #print "Redis!"
-        #if isRedis and isRedis.strip().lower() == "yes":
-        #    try:
-        #        self.redis_queue = redis.StrictRedis(host=self.cfg["redis/server"], port=6379, db=0)
-        #        q = self.cfg["redis/queues"]
-        #        self.redis_queues = q.split(",")
-        #        print "Redis queue is supported"
-        #    except:
-        #        self.queue = None
+        if isRedis and isRedis.strip().lower() == "yes":
+            try:
+                self.redis_queue = desir.Redis(host=self.cfg["redis/server"], port=6379, db=0)
+                q = self.cfg["redis/queues"]
+                self.redis_queues = q.split(",")
+                print "Redis queue is supported"
+            except:
+                self.queue = None
         if not self.redis_queue:
             print "Redis queue will not be supported"
     def getFromModule(self, modname, attrname):
@@ -84,6 +88,7 @@ def main(cfg_path):
     try:
         ctx =  ZBX_Context(cfg_path)
         print "Python-Zabbix ",ctx
-    except:
+    except KeyboardInterrupt:
         traceback.format_exc()
+        return None
     return ctx
