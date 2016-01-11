@@ -1,3 +1,8 @@
+WARNING !!!
+==============
+All development in this repositoryy is frozen. Future development will continue 
+here https://github.com/vulogov/zlm-cython
+
 pyzabbix-agent
 ==============
 
